@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <limits.h>
 #include <time.h>
+#include <omp.h> 
 
 //*********************************************************************definições***************************************************************
 
@@ -16,8 +17,27 @@
 #define A0 ((0.25*n*d0*d0)/tan((M_PI)/(1.0*n))) // Área de Equilíbrio
 #define plot_gnuplot 200
 #define t0 (0.0) //Tempo Inicial
-#define tf (1000000.0) //Tempo Final
+#define tf (10.0) //Tempo Final 1000000
 #define COLOR 7 //Cor dos anéis
+
+
+#if !(_SVID_SOURCE || _XOPEN_SOURCE)
+double drand48(void) {
+    return rand() / (RAND_MAX + 1.0);
+}
+
+long int lrand48(void) {
+    return rand();
+}
+
+long int mrand48(void) {
+    return rand() > RAND_MAX / 2 ? rand() : -rand();
+}
+
+void srand48(long int seedval) {
+    srand(seedval);
+}
+#endif
 
 //********************************************************************Estrutura***********************************************************************************************
 
@@ -108,7 +128,6 @@ int main(int argc, char *argv[]){
       list[i] = (int*) malloc(N * sizeof(int));
       nviz[i] = 0;
       for(j=0;j<N;j++) list[i][j] = 0;
-      
    }
   
    //Inicialização
@@ -116,10 +135,13 @@ int main(int argc, char *argv[]){
    count = 0;
    
    //Começando a dinâmica
-   for(t=t0;t<tf;t+=dt){
+   
+   printf("COMECOU\n");
+   clock_t begin = clock();
+   for(t=t0; t<tf; t+=dt) {
    
       //Gnuplot Movie (caso queira assistir video em tempo real)
-      if((count%plot_gnuplot)==0) VIEW_GNUPLOT(RING,t,L,PE,G,PHI,Kadh,N,p0,rc);
+      // if((count%plot_gnuplot)==0) VIEW_GNUPLOT(RING,t,L,PE,G,PHI,Kadh,N,p0,rc);
                   
 
       for(ai=0;ai<(N-1);ai++) {
@@ -160,9 +182,11 @@ int main(int argc, char *argv[]){
       count++;
       
    }
-    
+   printf("TERMINOU: ");
+   clock_t end = clock();
+   double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
+   printf("%f", time_spent);
    return(0);
-   
 }   
 
 
@@ -252,37 +276,33 @@ void VIEW_GNUPLOT(ring *RING,double t,double L,double PE,double G,double PHI,dou
    double x,y,vx,vy,rr,v;
 
    //Gnuplot
-   printf("unset key\n");
-   printf("unset xtics\n");
-   printf("unset ytics\n");
-   printf("set border lt 5\n");
-   printf("set object 1 rectangle from screen 0,0 to screen 1,1 fillcolor rgb\"black\" behind\n");
-   printf("set xrange [0.0:%lf]\n",L);
-   printf("set yrange [0.0:%lf]\n",L); 
-   printf("set size square \n");
-   printf("set title \"t: %.0lf, n:%d, N:%d, PHI:%.1lf, PE:%.1lf, G:%.0lf, p0:%.1lf, Kadh:%.1lf\" tc lt 5 \n",t,n,N,PHI,PE,G,p0,Kadh);
-   printf("plot \"-\" u 1:2:3:4 w circles lc variable fs solid 0.8\n");
+   // printf("unset key\n");
+   // printf("unset xtics\n");
+   // printf("unset ytics\n");
+   // printf("set border lt 5\n");
+   // printf("set object 1 rectangle from screen 0,0 to screen 1,1 fillcolor rgb\"black\" behind\n");
+   // printf("set xrange [0.0:%lf]\n",L);
+   // printf("set yrange [0.0:%lf]\n",L); 
+   // printf("set size square \n");
+   // printf("set title \"t: %.0lf, n:%d, N:%d, PHI:%.1lf, PE:%.1lf, G:%.0lf, p0:%.1lf, Kadh:%.1lf\" tc lt 5 \n",t,n,N,PHI,PE,G,p0,Kadh);
+   // printf("plot \"-\" u 1:2:3:4 w circles lc variable fs solid 0.8\n");
 
    //print N RINGS
   
    for(ai=0;ai<(N);ai++){
-      for(aj=0;aj<(n);aj++){
-	 
-	 x = RING[ai].PART[aj].x;
-	 y = RING[ai].PART[aj].y;
-	 vx = RING[ai].PART[aj].vx;
-	 vy =  RING[ai].PART[aj].vy;
+      for(aj=0;aj<(n);aj++){ 
+         x = RING[ai].PART[aj].x;
+         y = RING[ai].PART[aj].y;
+         vx = RING[ai].PART[aj].vx;
+         vy =  RING[ai].PART[aj].vy;
          rr = 0.5*rc;
-	 color = RING[ai].PART[aj].color;
-	 //printf("%lf %lf %lf %lf %lf %d\n",x,y,vx/v,vy/v,rr,color);
-	 printf("%lf %lf %lf %d %lf %lf\n",x,y,rr,color,vx,vy);
-
+	      color = RING[ai].PART[aj].color;
+	      //printf("%lf %lf %lf %lf %lf %d\n",x,y,vx/v,vy/v,rr,color);
+	      //printf("%lf %lf %lf %d %lf %lf\n",x,y,rr,color,vx,vy);
       }
       
    }
-   
-   printf("e\n");
-   
+   //printf("e\n");
 }
 
 void PBC(ring *RING,int ai,int aj,double L,double *z1,double *z2,double *z3,double *z4,int N){
@@ -476,6 +496,7 @@ void forces(ring *RING,int **list,int *nviz,int ai,double L,double Kadh,double r
    RING[ai].PART[n].A = 0.0;
    xj = 0.0;
    yj = 0.0;
+   #pragma omp parallel for num_threads(4)
    for(aj=0;aj<n;aj++){
 
       //dx
@@ -509,6 +530,7 @@ void forces(ring *RING,int **list,int *nviz,int ai,double L,double Kadh,double r
 
    }
       //Loop sobre as partículas do anel ai
+      #pragma omp parallel for num_threads(4)
       for(aj=0;aj<n;aj++){
        //Loop sobre os vizinhos do anel ai	 
         for(Viz=0;Viz<nviz[ai];Viz++){
